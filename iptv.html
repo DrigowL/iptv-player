@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>IPTV Player</title>
+    <style>
+        body { margin: 0; background: #f0f0f0; display: flex; height: 100vh; }
+        .sidebar { width: 250px; padding: 10px; background: #f2f2f2; }
+        .main-content { flex: 1; padding: 20px; }
+        .error-message { color: red; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <input type="text" id="m3uUrl" value="http://orgath.top/get.php?username=871405857&password=B424q9257V&type=m3u_plus&output=ts">
+        <button onclick="loadPlaylist()">Carregar</button>
+        <button onclick="clearPlaylist()">Limpar</button>
+        <div id="channelList"></div>
+    </div>
+    <div class="main-content">
+        <video id="player" controls></video>
+        <div id="error-message" class="error-message"></div>
+    </div>
+
+    <script>
+        const player = document.getElementById("player");
+        const channelList = document.getElementById("channelList");
+        const errorMessage = document.getElementById("error-message");
+        const m3uUrlInput = document.getElementById("m3uUrl");
+        let channels = [];
+
+        function loadPlaylist() {
+            const url = m3uUrlInput.value.trim();
+            const proxyUrl = "https://cors-anywhere.herokuapp.com/";
+            fetch(proxyUrl + url, {
+                headers: {
+                    "User-Agent": "Vu Player Pro"
+                }
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+                return response.text();
+            })
+            .then(text => {
+                channels = parseM3u(text);
+                displayChannels();
+                playChannel(0);
+            })
+            .catch(error => {
+                errorMessage.textContent = `Erro: ${error.message}`;
+                console.error("Erro ao carregar playlist:", error);
+            });
+        }
+
+        function parseM3u(text) {
+            const lines = text.split("\n");
+            const channels = [];
+            let currentChannel = null;
+            for (let line of lines) {
+                line = line.trim();
+                if (line.startsWith("#EXTINF:")) {
+                    const parts = line.split(",");
+                    const name = parts.length > 1 ? parts[1] : "Canal Sem Nome";
+                    currentChannel = { name, url: "" };
+                } else if (line && !line.startsWith("#") && currentChannel) {
+                    currentChannel.url = line;
+                    channels.push(currentChannel);
+                    currentChannel = null;
+                }
+            }
+            return channels;
+        }
+
+        function displayChannels() {
+            channelList.innerHTML = channels.map((ch, i) => `<div onclick="playChannel(${i})">${ch.name}</div>`).join("");
+        }
+
+        function playChannel(index) {
+            player.src = channels[index].url;
+            player.play().catch(error => {
+                errorMessage.textContent = `Erro ao reproduzir: ${error.message}`;
+            });
+        }
+
+        function clearPlaylist() {
+            channels = [];
+            channelList.innerHTML = "";
+            player.src = "";
+            errorMessage.textContent = "";
+        }
+    </script>
+</body>
+</html>
