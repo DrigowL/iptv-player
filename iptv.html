@@ -6,16 +6,65 @@
     <title>IPTV Player</title>
     <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
     <style>
-        body { margin: 0; font-family: Arial, sans-serif; background-color: #f0f0f0; display: flex; height: 100vh; }
-        .sidebar { width: 250px; background: #f2f2f2; padding: 10px; overflow-y: auto; border-right: 1px solid #ccc; }
-        .main-content { flex: 1; padding: 20px; display: flex; flex-direction: column; }
-        .controls { margin-bottom: 20px; }
-        input, button { padding: 5px; margin-right: 10px; }
-        #channelList .channel { padding: 10px; border-bottom: 1px solid #ddd; cursor: pointer; }
-        #channelList .channel:hover { background: #e0e0e0; }
-        .video-container { flex: 1; display: flex; justify-content: center; align-items: center; }
-        .video-js { width: 100% !important; height: 100% !important; object-fit: contain; }
-        .error-message { color: red; text-align: center; margin-top: 10px; display: none; }
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            height: 100vh;
+        }
+        .sidebar {
+            width: 300px;
+            background: #f2f2f2;
+            padding: 10px;
+            overflow-y: auto;
+            border-right: 1px solid #ccc;
+        }
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        input, button {
+            padding: 5px;
+            margin-right: 10px;
+        }
+        #channelList .channel {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        #channelList .channel:hover {
+            background: #e0e0e0;
+        }
+        #channelList .channel img {
+            width: 40px;
+            height: 40px;
+            margin-right: 10px;
+        }
+        .video-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .video-js {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: contain;
+        }
+        .error-message {
+            color: red;
+            text-align: center;
+            margin-top: 10px;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -44,39 +93,36 @@
         const m3uUrlInput = document.getElementById('m3uUrl');
         let channels = [];
 
-        function loadPlaylist() {
+        async function loadPlaylist() {
             const url = m3uUrlInput.value.trim();
             if (!url) {
                 alert('Insira uma URL válida.');
                 return;
             }
-            // Tentativa com proxy CORS
+
             const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-            fetch(proxyUrl + url, {
-                headers: {
-                    'User-Agent': 'Vu Player Pro',
-                    'Origin': 'https://vuplayerpro.com' // Simula uma origem válida
-                }
-            })
-            .then(response => {
+            try {
+                const response = await fetch(proxyUrl + url, {
+                    headers: {
+                        'User-Agent': 'VuPlayerPro' // Simula um aplicativo IPTV
+                    }
+                });
                 if (!response.ok) {
                     throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
                 }
-                return response.text();
-            })
-            .then(text => {
+                const text = await response.text();
+                console.log('Conteúdo da playlist (primeiros 200 caracteres):', text.substring(0, 200));
                 channels = parseM3u(text);
                 if (channels.length === 0) {
-                    throw new Error('Nenhum canal encontrado na playlist.');
+                    throw new Error('Nenhum canal encontrado na playlist. Verifique o formato.');
                 }
                 displayChannels();
-                playChannel(0);
-            })
-            .catch(error => {
+                playChannel(0); // Reproduz o primeiro item automaticamente
+            } catch (error) {
                 errorMessage.textContent = `Erro: ${error.message}`;
                 errorMessage.style.display = 'block';
                 console.error('Erro ao carregar playlist:', error);
-            });
+            }
         }
 
         function parseM3u(text) {
@@ -87,15 +133,29 @@
             for (let line of lines) {
                 line = line.trim();
                 if (line.startsWith('#EXTINF:')) {
-                    const parts = line.split(',');
-                    const name = parts.length > 1 ? parts[1].trim() : 'Canal Sem Nome';
-                    currentChannel = { name, url: '' };
+                    const infoMatch = line.match(/#EXTINF:-?\d+([^,]*),(.*)/);
+                    if (infoMatch) {
+                        const attributesStr = infoMatch[1];
+                        const name = infoMatch[2].trim();
+                        const attributes = {};
+                        const attrMatches = attributesStr.matchAll(/(\w+[-\w]*?)="([^"]*)"/g);
+                        for (const match of attrMatches) {
+                            attributes[match[1]] = match[2];
+                        }
+                        currentChannel = {
+                            name: attributes['tvg-name'] || name || 'Item Sem Nome',
+                            url: '',
+                            logo: attributes['tvg-logo'] || '',
+                            group: attributes['group-title'] || 'Sem Grupo'
+                        };
+                    }
                 } else if (line && !line.startsWith('#') && currentChannel) {
                     currentChannel.url = line;
                     channels.push(currentChannel);
                     currentChannel = null;
                 }
             }
+            console.log('Itens encontrados:', channels);
             return channels;
         }
 
@@ -104,7 +164,10 @@
             channels.forEach((channel, index) => {
                 const div = document.createElement('div');
                 div.className = 'channel';
-                div.textContent = channel.name;
+                div.innerHTML = `
+                    ${channel.logo ? `<img src="${channel.logo}" alt="${channel.name}" onerror="this.style.display='none'">` : ''}
+                    <span>${channel.group} - ${channel.name}</span>
+                `;
                 div.onclick = () => playChannel(index);
                 channelList.appendChild(div);
             });
@@ -116,7 +179,7 @@
             player.play().catch(error => {
                 errorMessage.textContent = `Erro ao reproduzir: ${error.message}`;
                 errorMessage.style.display = 'block';
-                console.error('Erro ao reproduzir canal:', error);
+                console.error('Erro ao reproduzir item:', error);
             });
         }
 
