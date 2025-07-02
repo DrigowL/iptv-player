@@ -6,58 +6,16 @@
     <title>IPTV Player</title>
     <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
     <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-            display: flex;
-            height: 100vh;
-        }
-        .sidebar {
-            width: 250px;
-            background: #f2f2f2;
-            padding: 10px;
-            overflow-y: auto;
-            border-right: 1px solid #ccc;
-        }
-        .main-content {
-            flex: 1;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-        }
-        .controls {
-            margin-bottom: 20px;
-        }
-        input, button {
-            padding: 5px;
-            margin-right: 10px;
-        }
-        #channelList .channel {
-            padding: 10px;
-            border-bottom: 1px solid #ddd;
-            cursor: pointer;
-        }
-        #channelList .channel:hover {
-            background: #e0e0e0;
-        }
-        .video-container {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .video-js {
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: contain;
-        }
-        .error-message {
-            color: red;
-            text-align: center;
-            margin-top: 10px;
-            display: none;
-        }
+        body { margin: 0; font-family: Arial, sans-serif; background-color: #f0f0f0; display: flex; height: 100vh; }
+        .sidebar { width: 250px; background: #f2f2f2; padding: 10px; overflow-y: auto; border-right: 1px solid #ccc; }
+        .main-content { flex: 1; padding: 20px; display: flex; flex-direction: column; }
+        .controls { margin-bottom: 20px; }
+        input, button { padding: 5px; margin-right: 10px; }
+        #channelList .channel { padding: 10px; border-bottom: 1px solid #ddd; cursor: pointer; }
+        #channelList .channel:hover { background: #e0e0e0; }
+        .video-container { flex: 1; display: flex; justify-content: center; align-items: center; }
+        .video-js { width: 100% !important; height: 100% !important; object-fit: contain; }
+        .error-message { color: red; text-align: center; margin-top: 10px; display: none; }
     </style>
 </head>
 <body>
@@ -92,28 +50,35 @@
                 alert('Insira uma URL válida.');
                 return;
             }
-            fetch(url)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
-                    }
-                    return response.text();
-                })
-                .then(text => {
-                    console.log('Conteúdo da playlist (primeiros 200 caracteres):', text.substring(0, 200));
-                    channels = parseM3u(text);
-                    console.log('Canais encontrados:', channels);
-                    if (channels.length === 0) {
-                        throw new Error('Nenhum canal encontrado na playlist. Verifique o formato.');
-                    }
-                    displayChannels();
-                    playChannel(0);
-                })
-                .catch(error => {
-                    errorMessage.textContent = `Erro: ${error.message}`;
-                    errorMessage.style.display = 'block';
-                    console.error('Erro ao carregar playlist:', error);
-                });
+
+            // Usar proxy CORS para evitar bloqueios
+            const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+            fetch(proxyUrl + url, {
+                headers: {
+                    'User-Agent': 'VuPlayerPro' // Simula um aplicativo IPTV
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
+                }
+                return response.text();
+            })
+            .then(text => {
+                console.log('Conteúdo da playlist (primeiros 200 caracteres):', text.substring(0, 200));
+                channels = parseM3u(text);
+                console.log('Canais encontrados:', channels);
+                if (channels.length === 0) {
+                    throw new Error('Nenhum canal encontrado na playlist. Verifique o formato.');
+                }
+                displayChannels();
+                playChannel(0);
+            })
+            .catch(error => {
+                errorMessage.textContent = `Erro: ${error.message}`;
+                errorMessage.style.display = 'block';
+                console.error('Erro ao carregar playlist:', error);
+            });
         }
 
         function parseM3u(text) {
@@ -124,12 +89,11 @@
             for (let line of lines) {
                 line = line.trim();
                 if (line.startsWith('#EXTINF:')) {
-                    const parts = line.split(',');
-                    let name = 'Canal Sem Nome';
-                    if (parts.length > 1) {
-                        name = parts[parts.length - 1].trim();
+                    const infoMatch = line.match(/#EXTINF:.*,(.*)/);
+                    if (infoMatch) {
+                        const name = infoMatch[1].trim();
+                        currentChannel = { name, url: '' };
                     }
-                    currentChannel = { name, url: '' };
                 } else if (line && !line.startsWith('#') && currentChannel) {
                     currentChannel.url = line;
                     channels.push(currentChannel);
@@ -152,7 +116,11 @@
 
         function playChannel(index) {
             const channel = channels[index];
-            player.src({ src: channel.url, type: 'application/x-mpegURL' });
+            let secureUrl = channel.url;
+            if (location.protocol === 'https:' && secureUrl.startsWith('http:')) {
+                secureUrl = secureUrl.replace('http:', 'https:');
+            }
+            player.src({ src: secureUrl, type: 'application/x-mpegURL' });
             player.play().catch(error => {
                 errorMessage.textContent = `Erro ao reproduzir: ${error.message}`;
                 errorMessage.style.display = 'block';
