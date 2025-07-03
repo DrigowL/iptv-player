@@ -1,139 +1,82 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IPTV Player</title>
-    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
-    <style>
-        body { margin: 0; font-family: Arial, sans-serif; background-color: #f0f0f0; display: flex; height: 100vh; }
-        .sidebar { width: 250px; background: #f2f2f2; padding: 10px; overflow-y: auto; border-right: 1px solid #ccc; }
-        .main-content { flex: 1; padding: 20px; display: flex; flex-direction: column; }
-        .controls { margin-bottom: 20px; }
-        input, button { padding: 5px; margin-right: 10px; }
-        #channelList .channel { padding: 10px; border-bottom: 1px solid #ddd; cursor: pointer; }
-        #channelList .channel:hover { background: #e0e0e0; }
-        .video-container { flex: 1; display: flex; justify-content: center; align-items: center; }
-        .video-js { width: 100% !important; height: 100% !important; object-fit: contain; }
-        .error-message { color: red; text-align: center; margin-top: 10px; display: none; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IPTV Player</title>
+  <style>
+    .loginForm { text-align: center; padding: 20px; }
+    .input-group { margin: 10px; }
+    #channelList { display: flex; flex-wrap: wrap; }
+    .channel { cursor: pointer; padding: 10px; margin: 5px; background: #f0f0f0; }
+  </style>
 </head>
 <body>
-    <div class="sidebar">
-        <div class="controls">
-            <input type="text" id="m3uUrl" placeholder="URL da Lista M3U" value="http://orgath.top/get.php?username=871405857&password=B424q9257V&type=m3u_plus&output=ts">
-            <button onclick="loadPlaylist()">Carregar</button>
-            <button onclick="clearPlaylist()">Limpar</button>
-        </div>
-        <div id="channelList"></div>
+  <div class="loginForm">
+    <h1>Enter Your Login Details</h1>
+    <div class="input-group">
+      <input type="text" id="input-username" placeholder="Username" value="871405857" required>
     </div>
-    <div class="main-content">
-        <div class="video-container">
-            <video id="iptv-player" class="video-js" controls preload="auto">
-                <p>Seu navegador não suporta vídeo.</p>
-            </video>
-            <div id="error-message" class="error-message"></div>
-        </div>
+    <div class="input-group">
+      <input type="password" id="input-password" placeholder="Password" value="B424q9257V" required>
     </div>
+    <button onclick="login()">Login</button>
+  </div>
+  <div id="channelList" style="display: none;"></div>
 
-    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
-    <script>
-        const player = videojs('iptv-player', { responsive: true, fluid: true });
-        const channelList = document.getElementById('channelList');
-        const errorMessage = document.getElementById('error-message');
-        const m3uUrlInput = document.getElementById('m3uUrl');
-        let channels = [];
+  <script>
+    function login() {
+      const username = document.getElementById('input-username').value;
+      const password = document.getElementById('input-password').value;
+      const loginUrl = 'http://navegadoruniplay.top/index.php?adduser';
 
-        function loadPlaylist() {
-            const url = m3uUrlInput.value.trim();
-            if (!url) {
-                alert('Insira uma URL válida.');
-                return;
-            }
+      fetch(loginUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124'
+        },
+        body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+      })
+      .then(response => {
+        if (!response.ok) throw new Error('Erro de autenticação: ' + response.status);
+        return response.text();
+      })
+      .then(data => {
+        console.log('Resposta do login:', data);
+        loadContent('http://navegadoruniplay.top/movies.php');
+      })
+      .catch(error => console.error('Erro:', error));
+    }
 
-            // Usar proxy CORS para evitar bloqueios
-            const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-            fetch(proxyUrl + url, {
-                headers: {
-                    'User-Agent': 'VuPlayerPro' // Simula um aplicativo IPTV
-                }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
-                }
-                return response.text();
-            })
-            .then(text => {
-                console.log('Conteúdo da playlist (primeiros 200 caracteres):', text.substring(0, 200));
-                channels = parseM3u(text);
-                console.log('Canais encontrados:', channels);
-                if (channels.length === 0) {
-                    throw new Error('Nenhum canal encontrado na playlist. Verifique o formato.');
-                }
-                displayChannels();
-                playChannel(0);
-            })
-            .catch(error => {
-                errorMessage.textContent = `Erro: ${error.message}`;
-                errorMessage.style.display = 'block';
-                console.error('Erro ao carregar playlist:', error);
-            });
-        }
+    function loadContent(url) {
+      fetch(url)
+        .then(response => {
+          if (!response.ok) throw new Error('Erro ao carregar conteúdo: ' + response.status);
+          return response.text();
+        })
+        .then(html => {
+          document.querySelector('.loginForm').style.display = 'none';
+          document.getElementById('channelList').style.display = 'block';
+          document.getElementById('channelList').innerHTML = html;
+          extractChannels();
+        })
+        .catch(error => console.error('Erro:', error));
+    }
 
-        function parseM3u(text) {
-            const lines = text.split('\n');
-            const channels = [];
-            let currentChannel = null;
-
-            for (let line of lines) {
-                line = line.trim();
-                if (line.startsWith('#EXTINF:')) {
-                    const infoMatch = line.match(/#EXTINF:.*,(.*)/);
-                    if (infoMatch) {
-                        const name = infoMatch[1].trim();
-                        currentChannel = { name, url: '' };
-                    }
-                } else if (line && !line.startsWith('#') && currentChannel) {
-                    currentChannel.url = line;
-                    channels.push(currentChannel);
-                    currentChannel = null;
-                }
-            }
-            return channels;
-        }
-
-        function displayChannels() {
-            channelList.innerHTML = '';
-            channels.forEach((channel, index) => {
-                const div = document.createElement('div');
-                div.className = 'channel';
-                div.textContent = channel.name;
-                div.onclick = () => playChannel(index);
-                channelList.appendChild(div);
-            });
-        }
-
-        function playChannel(index) {
-            const channel = channels[index];
-            let secureUrl = channel.url;
-            if (location.protocol === 'https:' && secureUrl.startsWith('http:')) {
-                secureUrl = secureUrl.replace('http:', 'https:');
-            }
-            player.src({ src: secureUrl, type: 'application/x-mpegURL' });
-            player.play().catch(error => {
-                errorMessage.textContent = `Erro ao reproduzir: ${error.message}`;
-                errorMessage.style.display = 'block';
-                console.error('Erro ao reproduzir canal:', error);
-            });
-        }
-
-        function clearPlaylist() {
-            channels = [];
-            channelList.innerHTML = '';
-            player.src('');
-            errorMessage.style.display = 'none';
-        }
-    </script>
+    function extractChannels() {
+      const channelList = document.getElementById('channelList');
+      const posters = channelList.querySelectorAll('.streamselector');
+      posters.forEach(poster => {
+        const name = poster.querySelector('.hoverOver').textContent;
+        const img = poster.querySelector('img').src;
+        const div = document.createElement('div');
+        div.className = 'channel';
+        div.innerHTML = `<img src="${img}" width="100"><br>${name}`;
+        div.onclick = () => console.log('Clicou em:', name); // Substitua por lógica de reprodução
+        channelList.appendChild(div);
+      });
+    }
+  </script>
 </body>
 </html>
